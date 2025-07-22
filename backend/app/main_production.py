@@ -17,7 +17,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load .env file from the root directory (parent of backend)
-env_path = Path(__file__).parent.parent.parent / '.env'
+env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 print(f"🔧 Loading environment from: {env_path}")
 print(f"🔧 Environment loaded successfully: {env_path.exists()}")

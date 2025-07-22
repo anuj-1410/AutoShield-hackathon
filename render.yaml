@@ -3,12 +3,22 @@ services:
     name: autoshield-backend
     env: python
     plan: free
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend/app && python main_production.py
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
-      - key: ETHERSCAN_API_KEY
+        value: 3.11.10
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: BLOCKCHAIN_RPC_URL
+        value: https://rpc.primordial.bdagscan.com
+      - key: CONTRACT_ADDRESS
+        value: 0x3367ba985fCA9e5999334279FdA9745b7e1C4812
+      - key: PRIVATE_KEY
         sync: false
+      - key: ETHERSCAN_API_KEY
+        value: 2ZSUDSBC8AGDAW9MTXF5GRS39AZATEVPY8
       - key: MORALIS_API_KEY
         sync: false
