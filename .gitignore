@@ -187,9 +187,7 @@ cache/
 artifacts/
 
 # AI/ML
-*.pkl
 *.joblib
-*.h5
 *.hdf5
 *.model
 models/

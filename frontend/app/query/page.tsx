@@ -14,10 +14,16 @@ interface QueryResult {
   status: "verified" | "suspected" | "unverified"
   confidence: number
   lastChecked: string
+  attestationHash?: string
+  blockchainTxHash?: string
+  riskFactors: string[]
   publicInfo?: {
     transactionCount: number
     accountAge: string
     riskScore: number
+    walletAgeDays: number
+    uniqueCounterparties: number
+    avgGasFee: number
   }
 }
 
@@ -51,7 +57,7 @@ export default function QueryPage() {
 
     try {
       // Call backend API
-      const response = await fetch(`http://localhost:8000/api/v1/verification/status/${searchAddress}`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/v1/verification/status/${searchAddress}`)
       if (!response.ok) {
         throw new Error('Failed to fetch verification status')
       }
@@ -59,15 +65,22 @@ export default function QueryPage() {
       const data = await response.json()
       
       // Transform backend response
+      const metrics = data.wallet_metrics || {}
       const result: QueryResult = {
         address: searchAddress,
         status: data.status,
         confidence: data.confidence_score,
         lastChecked: data.analyzed_at,
+        attestationHash: data.attestation_hash,
+        blockchainTxHash: data.blockchain_tx_hash,
+        riskFactors: data.risk_factors || [],
         publicInfo: {
-          transactionCount: Math.floor(Math.random() * 1000) + 100, // Mock for now
-          accountAge: `${Math.floor(Math.random() * 24) + 1} months`, // Mock for now
+          transactionCount: metrics.tx_count || 0,
+          accountAge: metrics.wallet_age_days ? `${Math.floor(metrics.wallet_age_days / 30)} months` : "Unknown",
           riskScore: data.risk_score || 0,
+          walletAgeDays: metrics.wallet_age_days || 0,
+          uniqueCounterparties: metrics.unique_counterparties || 0,
+          avgGasFee: metrics.average_gas_fee_paid || 0,
         },
       }
       
@@ -169,7 +182,7 @@ export default function QueryPage() {
 
                       {queryResult.publicInfo && (
                         <div className="border-t pt-4">
-                          <h4 className="font-medium mb-3">Public Information</h4>
+                          <h4 className="font-medium mb-3">Wallet Metrics</h4>
                           <div className="grid grid-cols-3 gap-4 text-sm">
                             <div>
                               <div className="text-muted-foreground">Transactions</div>
@@ -183,6 +196,52 @@ export default function QueryPage() {
                               <div className="text-muted-foreground">Risk Score</div>
                               <div className="font-medium">{queryResult.publicInfo.riskScore}/100</div>
                             </div>
+                            <div>
+                              <div className="text-muted-foreground">Counterparties</div>
+                              <div className="font-medium">{queryResult.publicInfo.uniqueCounterparties}</div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Avg Gas Fee</div>
+                              <div className="font-medium">{(queryResult.publicInfo.avgGasFee * 1e9).toFixed(2)} Gwei</div>
+                            </div>
+                            <div>
+                              <div className="text-muted-foreground">Wallet Age</div>
+                              <div className="font-medium">{queryResult.publicInfo.walletAgeDays} days</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {queryResult.riskFactors.length > 0 && (
+                        <div className="border-t pt-4">
+                          <h4 className="font-medium mb-3 text-red-400">Risk Factors</h4>
+                          <ul className="text-sm space-y-1">
+                            {queryResult.riskFactors.map((factor, index) => (
+                              <li key={index} className="flex items-center gap-2">
+                                <AlertTriangle className="h-3 w-3 text-red-400" />
+                                {factor}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {(queryResult.attestationHash || queryResult.blockchainTxHash) && (
+                        <div className="border-t pt-4">
+                          <h4 className="font-medium mb-3">Blockchain Info</h4>
+                          <div className="space-y-2 text-sm">
+                            {queryResult.attestationHash && (
+                              <div>
+                                <div className="text-muted-foreground">Attestation Hash</div>
+                                <div className="font-mono text-xs break-all">{queryResult.attestationHash}</div>
+                              </div>
+                            )}
+                            {queryResult.blockchainTxHash && (
+                              <div>
+                                <div className="text-muted-foreground">Transaction Hash</div>
+                                <div className="font-mono text-xs break-all">{queryResult.blockchainTxHash}</div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -215,7 +274,7 @@ export default function QueryPage() {
               </div>
               <div>
                 <h4 className="font-medium mb-2">REST API Endpoint</h4>
-                <div className="bg-muted p-3 rounded font-mono text-sm">{`GET /api/verify/0x742d35Cc...`}</div>
+                <div className="bg-muted p-3 rounded font-mono text-sm">{`GET /api/v1/verification/status/0x742d35Cc...`}</div>
               </div>
               <Button variant="outline" className="w-full bg-transparent">
                 View Full API Documentation
