@@ -443,18 +443,18 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 if __name__ == "__main__":
-    print("🛡️  AutoShield Production Backend")
+    print("\U0001F6E1️  AutoShield Production Backend")
     print("=" * 40)
-    print("🚀 Starting server...")
-    print("📍 Backend: http://localhost:8000")
-    print("📖 API Docs: http://localhost:8000/api/docs")
-    print("🏥 Health: http://localhost:8000/health")
+    print("\U0001F680 Starting server...")
+    print("\U0001F4CD Backend: http://localhost:8000")
+    print("\U0001F4D6 API Docs: http://localhost:8000/api/docs")
+    print("\U0001F3E5 Health: http://localhost:8000/health")
     print("=" * 40)
-    
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run(
         "main_production:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=True,
         log_level="info"
     )

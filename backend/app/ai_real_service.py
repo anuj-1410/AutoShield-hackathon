@@ -32,7 +32,7 @@ class RealAIService:
     def _load_model(self):
         """Load the trained ML model components"""
         try:
-            model_dir = os.path.join('..', '..', 'ai-services')
+            model_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'ai-services'))
             
             # Load model components
             self.model = joblib.load(os.path.join(model_dir, 'fraud_detection_model.pkl'))
