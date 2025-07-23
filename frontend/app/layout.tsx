@@ -11,7 +11,6 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "AutoShield - Decentralized Account Verification",
   description: "AI-powered fake account detection with blockchain verification for Web3 ecosystems",
-    generator: 'v0.dev'
 }
 
 export default function RootLayout({

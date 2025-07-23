@@ -137,6 +137,9 @@ class SmartContractService:
         Returns:
             Transaction hash if successful, None if failed
         """
+        logger.info(f"🔍 DEBUG: Starting save_verification_result for {wallet_address}")
+        logger.info(f"🔍 DEBUG: Connected: {self.connected}, Contract: {self.contract is not None}, Account: {self.account is not None}")
+        
         if not self.connected or not self.contract or not self.account:
             logger.info(f"💾 [DEMO] Would save to blockchain: {wallet_address} -> {status}")
             return None
@@ -149,6 +152,63 @@ class SmartContractService:
             # Convert confidence to integer (0-10000 for precision)
             confidence_int = int(confidence_score * 100)
             
+            logger.info(f"🔍 DEBUG: Status enum: {status_enum}, Confidence int: {confidence_int}")
+            
+            # Check account balance first
+            balance = self.w3.eth.get_balance(self.account.address)
+            logger.info(f"🔍 DEBUG: Account balance: {balance} wei ({balance/1e18:.6f} ETH)")
+            
+            if balance == 0:
+                logger.error(f"❌ Account has zero balance! Cannot send transaction.")
+                return None
+            
+            # Get nonce and gas price
+            nonce = self.w3.eth.get_transaction_count(self.account.address, 'pending')
+            gas_price = self.w3.eth.gas_price
+            
+            logger.info(f"🔍 DEBUG: Nonce: {nonce}, Gas price: {gas_price} wei")
+            
+            # Simplified pending transaction check (faster)
+            try:
+                # Get pending transaction count for our account only
+                pending_nonce = self.w3.eth.get_transaction_count(self.account.address, 'pending')
+                confirmed_nonce = self.w3.eth.get_transaction_count(self.account.address, 'latest')
+                our_pending_count = pending_nonce - confirmed_nonce
+                
+                logger.info(f"🔍 DEBUG: Our pending transactions: {our_pending_count}")
+                
+                if our_pending_count > 0:
+                    gas_price = int(gas_price * 1.15)  # Increased bump for faster confirmation
+                    logger.info(f"🔍 DEBUG: Bumped gas price to: {gas_price} wei")
+                    
+            except Exception as pending_e:
+                logger.warning(f"⚠️ Could not check pending transactions: {pending_e}")
+            
+            # Estimate gas first
+            try:
+                gas_estimate = self.contract.functions.updateVerification(
+                    Web3.to_checksum_address(wallet_address),
+                    status_enum,
+                    attestation_hash,
+                    confidence_int
+                ).estimate_gas({'from': self.account.address})
+                
+                # Add 20% buffer to gas estimate
+                gas_limit = int(gas_estimate * 1.2)
+                logger.info(f"🔍 DEBUG: Gas estimate: {gas_estimate}, Using limit: {gas_limit}")
+                
+            except Exception as gas_e:
+                logger.warning(f"⚠️ Gas estimation failed: {gas_e}, using default 300000")
+                gas_limit = 300000
+            
+            # Check if we have enough balance for gas
+            gas_cost = gas_limit * gas_price
+            if balance < gas_cost:
+                logger.error(f"❌ Insufficient balance for gas! Need: {gas_cost} wei, Have: {balance} wei")
+                return None
+            
+            logger.info(f"🔍 DEBUG: Building transaction...")
+            
             # Build transaction
             transaction = self.contract.functions.updateVerification(
                 Web3.to_checksum_address(wallet_address),
@@ -157,44 +217,84 @@ class SmartContractService:
                 confidence_int
             ).build_transaction({
                 'from': self.account.address,
-                'gas': 300000,  # Increased gas limit based on successful test
-                'gasPrice': self.w3.eth.gas_price,
-                'nonce': self.w3.eth.get_transaction_count(self.account.address),
+                'gas': gas_limit,
+                'gasPrice': gas_price,
+                'nonce': nonce,
             })
             
+            logger.info(f"🔍 DEBUG: Transaction built successfully")
+            logger.info(f"🔍 DEBUG: Transaction details - Gas: {transaction['gas']}, GasPrice: {transaction['gasPrice']}, Nonce: {transaction['nonce']}")
+            
             # Sign and send transaction
+            logger.info(f"🔍 DEBUG: Signing transaction...")
             signed_txn = self.account.sign_transaction(transaction)
+            
+            logger.info(f"🔍 DEBUG: Sending transaction...")
             tx_hash = await asyncio.to_thread(
                 self.w3.eth.send_raw_transaction,
                 signed_txn.rawTransaction
             )
             
-            # Wait for confirmation
-            receipt = await asyncio.to_thread(
-                self.w3.eth.wait_for_transaction_receipt,
-                tx_hash,
-                timeout=120
-            )
+            tx_hash_str = tx_hash.hex()
+            logger.info(f"🔍 DEBUG: Transaction sent! Hash: {tx_hash_str}")
             
-            if receipt.status == 1:
-                tx_hash_str = tx_hash.hex()
-                logger.info(f"✅ Verification saved to blockchain: {tx_hash_str}")
-                return tx_hash_str
-            else:
-                logger.error(f"❌ Transaction failed for {wallet_address}")
+            # Wait for confirmation with shorter timeout and better handling
+            logger.info(f"🔍 DEBUG: Waiting for transaction receipt...")
+            try:
+                receipt = await asyncio.to_thread(
+                    self.w3.eth.wait_for_transaction_receipt,
+                    tx_hash,
+                    timeout=30  # Reduced timeout from 120 to 30 seconds
+                )
+                
+                logger.info(f"🔍 DEBUG: Receipt received - Status: {receipt.status}, Gas used: {receipt.gasUsed}")
+                
+                if receipt.status == 1:
+                    logger.info(f"✅ Verification saved to blockchain: {tx_hash_str}")
+                    logger.info(f"🔍 DEBUG: Block number: {receipt.blockNumber}, Gas used: {receipt.gasUsed}")
+                    return tx_hash_str
+                else:
+                    logger.error(f"❌ Transaction failed for {wallet_address}")
+                    logger.error(f"❌ Receipt: {dict(receipt)}")
+                    return None
+                    
+            except Exception as receipt_e:
+                # If receipt times out, transaction might still be pending
+                logger.warning(f"⚠️ Transaction receipt timeout after 30s: {receipt_e}")
+                logger.info(f"🔍 Transaction may still be pending: {tx_hash_str}")
+                
+                # Try to check if transaction exists in mempool
+                try:
+                    pending_tx = self.w3.eth.get_transaction(tx_hash)
+                    if pending_tx:
+                        logger.info(f"✅ Transaction sent successfully (pending): {tx_hash_str}")
+                        return tx_hash_str  # Return hash even if not confirmed yet
+                except:
+                    pass
+                    
+                logger.error(f"❌ Transaction may have failed: {tx_hash_str}")
                 return None
                 
         except Exception as e:
+            logger.error(f"❌ Transaction failed for {wallet_address}")
             logger.error(f"❌ Failed to save to blockchain: {e}")
             logger.error(f"❌ Error type: {type(e).__name__}")
             logger.error(f"❌ Error details: {str(e)}")
             
-            # Log transaction details for debugging
+            # Enhanced debugging
             try:
                 logger.error(f"❌ Account address: {self.account.address}")
-                logger.error(f"❌ Account balance: {self.w3.eth.get_balance(self.account.address)}")
-                logger.error(f"❌ Current gas price: {self.w3.eth.gas_price}")
+                balance = self.w3.eth.get_balance(self.account.address)
+                logger.error(f"❌ Account balance: {balance} wei ({balance/1e18:.6f} ETH)")
+                logger.error(f"❌ Current gas price: {self.w3.eth.gas_price} wei")
                 logger.error(f"❌ Network chain ID: {self.w3.eth.chain_id}")
+                logger.error(f"❌ Network connected: {self.w3.is_connected()}")
+                logger.error(f"❌ Contract address: {self.contract_address}")
+                
+                # Try to get latest block to check connectivity
+                latest_block = self.w3.eth.get_block('latest')
+                logger.error(f"❌ Latest block number: {latest_block.number}")
+                
             except Exception as debug_e:
                 logger.error(f"❌ Could not get debug info: {debug_e}")
             

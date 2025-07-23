@@ -7,7 +7,7 @@ node_modules/
 # Production builds
 /build
 /dist
-/.next/
+/.next
 /out/
 
 # Environment variables

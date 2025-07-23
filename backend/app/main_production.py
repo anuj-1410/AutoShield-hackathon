@@ -262,16 +262,40 @@ async def analyze_account(
         
         # Step 4: Save to smart contract (for verified accounts)
         blockchain_tx_hash = None
+        
+        logger.info(f"🔍 DEBUG: AI result status: {ai_result['status']}")
+        logger.info(f"🔍 DEBUG: Has attestation hash: {ai_result.get('attestation_hash') is not None}")
+        logger.info(f"🔍 DEBUG: Is sample account: {request.wallet_address in SAMPLE_ACCOUNTS}")
+        
         if ai_result["status"] == "verified" and ai_result.get("attestation_hash"):
             logger.info("💾 Saving verification to smart contract...")
-            blockchain_tx_hash = await contract_service.save_verification_result(
-                wallet_address=request.wallet_address,
-                status=ai_result["status"],
-                attestation_hash=ai_result["attestation_hash"],
-                confidence_score=ai_result["confidence_score"]
-            )
-            if blockchain_tx_hash:
-                result["blockchain_tx_hash"] = blockchain_tx_hash
+            
+            # Create a timeout wrapper for blockchain operations
+            try:
+                blockchain_tx_hash = await asyncio.wait_for(
+                    contract_service.save_verification_result(
+                        wallet_address=request.wallet_address,
+                        status=ai_result["status"],
+                        attestation_hash=ai_result["attestation_hash"],
+                        confidence_score=ai_result["confidence_score"]
+                    ),
+                    timeout=45.0  # 45 second timeout for blockchain operations
+                )
+                
+                if blockchain_tx_hash:
+                    result["blockchain_tx_hash"] = blockchain_tx_hash
+                    logger.info(f"🔍 DEBUG: Blockchain transaction saved: {blockchain_tx_hash}")
+                else:
+                    logger.info(f"🔍 DEBUG: Blockchain transaction failed or demo mode")
+                    
+            except asyncio.TimeoutError:
+                logger.warning(f"⚠️  Blockchain save timed out after 45s, continuing with response")
+                logger.info(f"🔍 DEBUG: Blockchain save timed out, but analysis completed successfully")
+            except Exception as blockchain_e:
+                logger.error(f"❌ Blockchain save error: {blockchain_e}")
+                logger.info(f"🔍 DEBUG: Blockchain save failed, but analysis completed successfully")
+        else:
+            logger.info(f"🔍 DEBUG: Skipping blockchain save - Status: {ai_result['status']}, Has attestation: {ai_result.get('attestation_hash') is not None}")
         
         logger.info(f"✅ Analysis completed: {ai_result['status']} ({ai_result['confidence_score']}% confidence)")
         
@@ -291,8 +315,8 @@ async def get_verification_status(
     """
     Get verification status for a wallet address
     
-    First checks smart contract for existing verification,
-    then performs new analysis if needed
+    For sample accounts, always performs fresh analysis.
+    For real accounts, checks smart contract first, then performs new analysis if needed.
     """
     try:
         # Validate wallet address
@@ -300,8 +324,15 @@ async def get_verification_status(
             raise HTTPException(status_code=400, detail="Invalid Ethereum address format")
         
         logger.info(f"📋 Getting verification status for: {wallet_address}")
+        logger.info(f"🔍 DEBUG: Is sample account: {wallet_address in SAMPLE_ACCOUNTS}")
         
-        # Check smart contract first
+        # For sample accounts, always perform fresh analysis to show correct results
+        if wallet_address in SAMPLE_ACCOUNTS:
+            logger.info("📝 Sample account detected, performing fresh analysis")
+            request = VerificationRequest(wallet_address=wallet_address)
+            return await analyze_account(request, ai_service, blockchain_service, contract_service)
+        
+        # For real accounts, check smart contract first
         contract_result = await contract_service.get_verification_status(wallet_address)
         
         if contract_result and contract_result.get("on_chain"):
