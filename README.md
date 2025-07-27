@@ -7,6 +7,10 @@
 [![Next.js 14](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-009688.svg)](https://fastapi.tiangolo.com/)
 
+## 🌐 Live Demo
+
+Check out the live deployment here: https://auto-shield-hackathon.vercel.app/
+
 ## ✨ Key Features
 
 🤖 **Real AI/ML Detection**: Production-ready ML models with 97%+ accuracy fraud detection  
@@ -16,6 +20,23 @@
 📊 **Advanced Analytics**: Comprehensive wallet metrics and risk assessment  
 🌐 **Developer-Friendly**: REST APIs and smart contract interfaces for easy integration  
 💡 **Sample Data Support**: Pre-loaded sample accounts for testing and demonstration  
+
+## 📸 Screenshots
+
+### ⚙️ Start-up Dashboard
+![Start-up Dashboard](https://github.com/user-attachments/assets/28ea2791-5de9-4b40-b58a-9160f13d236b)
+
+### 🔐 Login Page
+![Login](https://github.com/user-attachments/assets/1894502e-237d-41b1-af19-d080340dc8a6)
+
+### 📊 Account Dashboard
+| Overview 1 | Overview 2 |
+|------------|-------------|
+| ![Dashboard 1](https://github.com/user-attachments/assets/f4de644b-4f50-4461-9201-db57fe41bcac) | ![Dashboard 2](https://github.com/user-attachments/assets/30695871-d347-4d6a-81b2-94979fdc81f3) |
+
+### ✅ Account Verification
+![Account Verification](https://github.com/user-attachments/assets/ef510cb8-0650-481b-b3c1-5e020ab8eaab)
+
 
 ## 🏗️ Architecture Overview
 
